@@ -39,20 +39,6 @@ pip install -r requirements.txt
 
 And that's it! :tada:
 
-### Using Docker
-
-In order to build the Docker image for this project, you can use the command:
-
-```
-docker buildx build --platform linux/amd64,linux/arm64 --push -t humbertowoody/pq-tls:latest .
-```
-
-In which we build for both x86 and ARM platforms (allowing us to run the same
-code on a wide range of end-architectures) and subsequently push-and-tag the
-resulting image onto a public registry for later consumption.
-
-This guarantees you will be using the same environment used in the experiment.
-
 ## Running the project
 
 The program itself takes two arguments:
