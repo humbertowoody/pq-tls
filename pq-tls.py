@@ -134,7 +134,7 @@ def servidor():
         for addr, (conn, pk_cliente, ciphertext, shared_secret, clave_aes) in clientes.items():
             if cliente == 1:
                 print(f"Servidor: Esperando mensaje cifrado del cliente {addr}.")
-                mensaje_cifrado = conn.recv(n_bytes + AES.block_size)
+                mensaje_cifrado = conn.recv(1000001) #(n_bytes + AES.block_size)
                 print(f"Servidor: Mensaje cifrado recibido del cliente {addr} con longitud {len(mensaje_cifrado)} bytes.")
                 mensaje_descifrado = descifrar_aes(mensaje_cifrado, clave_aes)
                 print(f"Servidor: Mensaje descifrado del cliente {addr}: {mensaje_descifrado}")
@@ -223,7 +223,7 @@ def cliente(id_cliente):
         # Según el client_id, decidir si se envía o recibe el mensaje cifrado con AES.
         if id_cliente == 1:
             print(f"Cliente {id_cliente}: Generando mensaje aleatorio de {n_bytes} bytes y enviando al servidor.")
-            mensaje_prueba = b'holi'#get_random_bytes(n_bytes)
+            mensaje_prueba = get_random_bytes(n_bytes)
             print(f"Cliente {id_cliente}: Mensaje aleatorio generado: {mensaje_prueba}")
             mensaje_cifrado = cifrar_aes(mensaje_prueba, clave_aes)
             print(f"Cliente {id_cliente}: Mensaje cifrado: {mensaje_cifrado}")
@@ -231,7 +231,7 @@ def cliente(id_cliente):
             print(f"Cliente {id_cliente}: Mensaje cifrado enviado al servidor con longitud {len(mensaje_cifrado)} bytes.")
         else:
             print(f"Cliente {id_cliente}: Esperando mensaje cifrado del servidor.")
-            mensaje_cifrado = s.recv(n_bytes + AES.block_size)
+            mensaje_cifrado = s.recv(1000001) #(n_bytes + AES.block_size)
             print(f"Cliente {id_cliente}: Mensaje cifrado recibido del servidor con longitud {len(mensaje_cifrado)} bytes.")
             if len(mensaje_cifrado) == 0:
                 print(f"Cliente {id_cliente}: No se recibió mensaje del servidor.")
