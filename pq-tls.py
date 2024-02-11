@@ -13,23 +13,29 @@ import csv
 import psutil
 from os import getpid, path
 
+# Función para imprimir
+DEBUG = False
+def imprimir(mensaje):
+    if DEBUG:
+        print(mensaje)
+
 # Argumentos del programa
 verificacion_dilithium = int(sys.argv[1])  # 0: Sin verificación, 1: Solo clientes, 2: Clientes y servidor
 n_bytes = int(sys.argv[2])  # Cantidad N de bytes a transmitir
 
 # Imprimimos los argumentos
-print("Argumentos del programa:")
+imprimir("Argumentos del programa:")
 if verificacion_dilithium == 0:
-    print("\t- No se realizará verificación de Dilithium.")
+    imprimir("\t- No se realizará verificación de Dilithium.")
 elif verificacion_dilithium == 1:
-    print("\t- Se realizará verificación de Dilithium solo en los clientes.")
+    imprimir("\t- Se realizará verificación de Dilithium solo en los clientes.")
 elif verificacion_dilithium == 2:
-    print("\t- Se realizará verificación de Dilithium en los clientes y el servidor.")
+    imprimir("\t- Se realizará verificación de Dilithium en los clientes y el servidor.")
 else:
-    print("\t- El primer argumento debe ser 0, 1 o 2.")
+    imprimir("\t- El primer argumento debe ser 0, 1 o 2.")
     exit()
 
-print(f"\t- Se transmitirán {n_bytes} bytes.")
+imprimir(f"\t- Se transmitirán {n_bytes} bytes.")
 
 # Variables para mediciones
 tiempo_inicio_kem  = 0
@@ -50,6 +56,8 @@ cpu_inicio_aes     = 0
 cpu_fin_aes        = 0
 ram_inicio_aes     = 0
 ram_fin_aes        = 0
+
+servidor_listo = threading.Event()
 
 # Parámetros de la conexión
 HOST = '127.0.0.1'  # Dirección local para el servidor
@@ -127,7 +135,9 @@ def servidor():
         s.bind((HOST, PORT))
         s.listen()
 
-        print(f"Servidor: Escuchando en {HOST}:{PORT}")
+        servidor_listo.set()
+
+        imprimir(f"Servidor: Escuchando en {HOST}:{PORT}")
 
         # Medición: Inicio KEM.
         tiempo_inicio_kem = time.perf_counter()
@@ -137,18 +147,18 @@ def servidor():
         # Esperar a que se conecten dos clientes
         while len(clientes) < 2:
             conn, addr = s.accept()
-            print(f"Servidor: Cliente {addr} conectado.")
+            imprimir(f"Servidor: Cliente {addr} conectado.")
 
             # Recibir Clave Pública del Cliente
             pk_cliente = recibir(conn)
 
-            print(f"Servidor: Clave Pública KEM recibida del cliente {addr} con longitud {len(pk_cliente)} bytes.")
+            imprimir(f"Servidor: Clave Pública KEM recibida del cliente {addr} con longitud {len(pk_cliente)} bytes.")
 
             # Encapsular y generar ciphertext
             ciphertext, shared_secret = kyber.encaps(pk_cliente)
 
-            print(f"Servidor: Longitud del ciphertext generado para el cliente {addr}: {len(ciphertext)} bytes")
-            print(f"Servidor: Longitud del shared_secret generado para el cliente {addr}: {len(shared_secret)} bytes")
+            imprimir(f"Servidor: Longitud del ciphertext generado para el cliente {addr}: {len(ciphertext)} bytes")
+            imprimir(f"Servidor: Longitud del shared_secret generado para el cliente {addr}: {len(shared_secret)} bytes")
 
             # Shakear para obtener la clave AES de 256 bits
             clave_aes = shake_key(shared_secret, 32)
@@ -156,12 +166,12 @@ def servidor():
             # Guardar la información del cliente
             clientes[addr] = (conn, pk_cliente, ciphertext, shared_secret, clave_aes)
 
-            print(f"Servidor: Cliente {addr} registrado.")
+            imprimir(f"Servidor: Cliente {addr} registrado.")
 
         # Enviar el cyphertext a cada cliente.
         for addr, (conn, pk_cliente, ciphertext, shared_secret, clave_aes) in clientes.items():
             enviar(conn, ciphertext)
-            print(f"Servidor: Ciphertext enviado al cliente {addr} con longitud {len(ciphertext)} bytes.")
+            imprimir(f"Servidor: Ciphertext enviado al cliente {addr} con longitud {len(ciphertext)} bytes.")
 
         # Medición: Fin KEM.
         tiempo_fin_kem = time.perf_counter()
@@ -176,28 +186,28 @@ def servidor():
         # Si se requiere verificación de Dilithium ya sea para el servidor o ambos, recibir el certificado y la
         # clave pública de Dilithium de ambos clientes y verificar la firma.
         if verificacion_dilithium == 1 or verificacion_dilithium == 2:
-            print(f"Servidor: Recibiendo certificado y clave pública de Dilithium de los clientes.")
+            imprimir(f"Servidor: Recibiendo certificado y clave pública de Dilithium de los clientes.")
             # Recibir el certificado y la llave pública de dilithium del cliente y verificar.
             for addr, (conn, pk_cliente, ciphertext, shared_secret, clave_aes) in clientes.items():
-                print(f"Servidor: Recibiendo certificado y clave pública de Dilithium del cliente {addr}.")
+                imprimir(f"Servidor: Recibiendo certificado y clave pública de Dilithium del cliente {addr}.")
                 certificado_cliente = recibir(conn)
-                print(f"Servidor: Certificado recibido del cliente {addr} con longitud {len(certificado_cliente)} bytes.")
+                imprimir(f"Servidor: Certificado recibido del cliente {addr} con longitud {len(certificado_cliente)} bytes.")
                 pk_dilithium_cliente = recibir(conn)
-                print(f"Servidor: Clave Pública Dilithium recibida del cliente {addr} con longitud {len(pk_dilithium_cliente)} bytes.")
+                imprimir(f"Servidor: Clave Pública Dilithium recibida del cliente {addr} con longitud {len(pk_dilithium_cliente)} bytes.")
                 if dilithium.verify(pk_dilithium_cliente, b'Certificado de cliente', certificado_cliente):
-                    print(f"Servidor: La firma del cliente {addr} es válida.")
+                    imprimir(f"Servidor: La firma del cliente {addr} es válida.")
                 else:
-                    print(f"Servidor: La firma del cliente {addr} NO es válida.")
+                    imprimir(f"Servidor: La firma del cliente {addr} NO es válida.")
                     return
 
         # Si la verificación del servidor está habilitada, enviar el certificado y la clave pública de Dilithium.
         if verificacion_dilithium == 2:
-            print(f"Servidor: Enviando certificado y clave pública de Dilithium a los clientes.")
+            imprimir(f"Servidor: Enviando certificado y clave pública de Dilithium a los clientes.")
             for addr, (conn, pk_cliente, ciphertext, shared_secret, clave_aes) in clientes.items():
                 enviar(conn, certificado)
-                print(f"Servidor: Certificado enviado al cliente {addr} con longitud {len(certificado)} bytes.")
+                imprimir(f"Servidor: Certificado enviado al cliente {addr} con longitud {len(certificado)} bytes.")
                 enviar(conn, pk_dilithium)
-                print(f"Servidor: Clave Pública Dilithium enviada al cliente {addr} con longitud {len(pk_dilithium)} bytes.")
+                imprimir(f"Servidor: Clave Pública Dilithium enviada al cliente {addr} con longitud {len(pk_dilithium)} bytes.")
 
         # Medición: Fin DSS.
         tiempo_fin_dss = time.perf_counter()
@@ -215,18 +225,18 @@ def servidor():
         mensaje = b''
         for addr, (conn, pk_cliente, ciphertext, shared_secret, clave_aes) in clientes.items():
             if cliente == 1:
-                print(f"Servidor: Esperando mensaje cifrado del cliente {addr}.")
+                imprimir(f"Servidor: Esperando mensaje cifrado del cliente {addr}.")
                 mensaje_cifrado = recibir(conn)
-                print(f"Servidor: Mensaje cifrado recibido del cliente {addr} con longitud {len(mensaje_cifrado)} bytes.")
+                imprimir(f"Servidor: Mensaje cifrado recibido del cliente {addr} con longitud {len(mensaje_cifrado)} bytes.")
                 mensaje_descifrado = descifrar_aes(mensaje_cifrado, clave_aes)
-                print(f"Servidor: Mensaje descifrado del cliente {addr}: {mensaje_descifrado}")
+                imprimir(f"Servidor: Mensaje descifrado del cliente {addr}: {mensaje_descifrado}")
                 mensaje = mensaje_descifrado
                 cliente = 2
             else:
-                print(f"Servidor: Enviando mensaje cifrado al cliente {addr}.")
+                imprimir(f"Servidor: Enviando mensaje cifrado al cliente {addr}.")
                 mensaje_cifrado = cifrar_aes(mensaje, clave_aes)
                 enviar(conn, mensaje_cifrado)
-                print(f"Servidor: Mensaje cifrado enviado al cliente {addr} con longitud {len(mensaje_cifrado)} bytes.")
+                imprimir(f"Servidor: Mensaje cifrado enviado al cliente {addr} con longitud {len(mensaje_cifrado)} bytes.")
 
         # Medición: Fin AES.
         tiempo_fin_aes = time.perf_counter()
@@ -236,11 +246,11 @@ def servidor():
         # Cerrar la Conexión
         for addr, (conn, pk_cliente, ciphertext, shared_secret, clave_aes) in clientes.items():
             conn.close()
-            print(f"Servidor: Conexión con el cliente {addr} cerrada.")
+            imprimir(f"Servidor: Conexión con el cliente {addr} cerrada.")
 
         # Cerrar el socket
         s.close()
-        print("Servidor: Socket cerrado.")
+        imprimir("Servidor: Socket cerrado.")
 
 
 
@@ -261,79 +271,81 @@ def cliente(id_cliente):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((HOST, PORT))
 
-        print(f"Cliente {id_cliente}: Conectado al servidor.")
+        imprimir(f"Cliente {id_cliente}: Conectado al servidor.")
 
         # Enviar Clave Pública KEM al Servidor
         enviar(s, pk_kyber)
 
 
-        print(f"Cliente {id_cliente}: Clave Pública KEM enviada al servidor con longitud {len(pk_kyber)} bytes.")
+        imprimir(f"Cliente {id_cliente}: Clave Pública KEM enviada al servidor con longitud {len(pk_kyber)} bytes.")
 
         # Recibir ciphertext del Servidor
         ciphertext = recibir(s)
 
-        print(f"Cliente {id_cliente}: Ciphertext recibido del servidor con longitud {len(ciphertext)} bytes.")
+        imprimir(f"Cliente {id_cliente}: Ciphertext recibido del servidor con longitud {len(ciphertext)} bytes.")
 
         # Decapsular para obtener el shared_secret
         shared_secret = kyber.decaps(sk_kyber, ciphertext)
 
-        print(f"Cliente {id_cliente}: Shared Secret decapsulado con longitud {len(shared_secret)} bytes.")
+        imprimir(f"Cliente {id_cliente}: Shared Secret decapsulado con longitud {len(shared_secret)} bytes.")
 
         # "Shakear" para obtener la clave AES de 256 bits
         clave_aes = shake_key(shared_secret, 32)
 
-        print(f"Cliente {id_cliente}: Clave AES generada con longitud {len(clave_aes)} bytes.")
+        imprimir(f"Cliente {id_cliente}: Clave AES generada con longitud {len(clave_aes)} bytes.")
 
         # Si la verificación de cliente está habilitada, enviar el certificado y la clave pública de Dilithium.
         if verificacion_dilithium == 1 or verificacion_dilithium == 2:
-            print(f"Cliente {id_cliente}: Enviando certificado y clave pública de Dilithium al servidor.")
+            imprimir(f"Cliente {id_cliente}: Enviando certificado y clave pública de Dilithium al servidor.")
             enviar(s, certificado)
-            print(f"Cliente {id_cliente}: Certificado enviado al servidor con longitud {len(certificado)} bytes.")
+            imprimir(f"Cliente {id_cliente}: Certificado enviado al servidor con longitud {len(certificado)} bytes.")
             enviar(s, pk_dilithium)
-            print(f"Cliente {id_cliente}: Clave Pública Dilithium enviada al servidor con longitud {len(pk_dilithium)} bytes.")
+            imprimir(f"Cliente {id_cliente}: Clave Pública Dilithium enviada al servidor con longitud {len(pk_dilithium)} bytes.")
 
         # Si la verificación del servidor está habilitada, recibir el certificado y la calve pública de
         # Dilitium del servidor y verificar la firma.
         if verificacion_dilithium == 2:
-            print(f"Cliente {id_cliente}: Recibiendo certificado y clave pública de Dilithium del servidor.")
+            imprimir(f"Cliente {id_cliente}: Recibiendo certificado y clave pública de Dilithium del servidor.")
             certificado_servidor = recibir(s)
-            print(f"Cliente {id_cliente}: Certificado recibido del servidor con longitud {len(certificado_servidor)} bytes.")
+            imprimir(f"Cliente {id_cliente}: Certificado recibido del servidor con longitud {len(certificado_servidor)} bytes.")
             pk_dilithium_servidor = recibir(s)
-            print(f"Cliente {id_cliente}: Clave Pública Dilithium recibida del servidor con longitud {len(pk_dilithium_servidor)} bytes.")
+            imprimir(f"Cliente {id_cliente}: Clave Pública Dilithium recibida del servidor con longitud {len(pk_dilithium_servidor)} bytes.")
 
             if dilithium.verify(pk_dilithium_servidor, b'Certificado de servidor', certificado_servidor):
-                print(f"Cliente {id_cliente}: La firma del servidor es válida.")
+                imprimir(f"Cliente {id_cliente}: La firma del servidor es válida.")
             else:
-                print(f"Cliente {id_cliente}: La firma del servidor NO es válida.")
+                imprimir(f"Cliente {id_cliente}: La firma del servidor NO es válida.")
                 return
 
         # Según el client_id, decidir si se envía o recibe el mensaje cifrado con AES.
         if id_cliente == 1:
-            print(f"Cliente {id_cliente}: Generando mensaje aleatorio de {n_bytes} bytes y enviando al servidor.")
+            imprimir(f"Cliente {id_cliente}: Generando mensaje aleatorio de {n_bytes} bytes y enviando al servidor.")
             mensaje_prueba = get_random_bytes(n_bytes)
-            print(f"Cliente {id_cliente}: Mensaje aleatorio generado: {mensaje_prueba}")
+            imprimir(f"Cliente {id_cliente}: Mensaje aleatorio generado: {mensaje_prueba}")
             mensaje_cifrado = cifrar_aes(mensaje_prueba, clave_aes)
-            print(f"Cliente {id_cliente}: Mensaje cifrado: {mensaje_cifrado}")
+            imprimir(f"Cliente {id_cliente}: Mensaje cifrado: {mensaje_cifrado}")
             enviar(s, mensaje_cifrado)
-            print(f"Cliente {id_cliente}: Mensaje cifrado enviado al servidor con longitud {len(mensaje_cifrado)} bytes.")
+            imprimir(f"Cliente {id_cliente}: Mensaje cifrado enviado al servidor con longitud {len(mensaje_cifrado)} bytes.")
         else:
-            print(f"Cliente {id_cliente}: Esperando mensaje cifrado del servidor.")
+            imprimir(f"Cliente {id_cliente}: Esperando mensaje cifrado del servidor.")
             mensaje_cifrado = recibir(s)
-            print(f"Cliente {id_cliente}: Mensaje cifrado recibido del servidor con longitud {len(mensaje_cifrado)} bytes.")
+            imprimir(f"Cliente {id_cliente}: Mensaje cifrado recibido del servidor con longitud {len(mensaje_cifrado)} bytes.")
             if len(mensaje_cifrado) == 0:
-                print(f"Cliente {id_cliente}: No se recibió mensaje del servidor.")
+                imprimir(f"Cliente {id_cliente}: No se recibió mensaje del servidor.")
                 return
             mensaje_descifrado = descifrar_aes(mensaje_cifrado, clave_aes)
-            print(f"Cliente {id_cliente}: Mensaje descifrado del servidor: {mensaje_descifrado}")
+            imprimir(f"Cliente {id_cliente}: Mensaje descifrado del servidor: {mensaje_descifrado}")
 
         # Cerar la conexión
         s.close()
 
-        print(f"Cliente {id_cliente}: Conexión cerrada.")
+        imprimir(f"Cliente {id_cliente}: Conexión cerrada.")
 
 def iniciar_servidor():
     hilo_servidor = threading.Thread(target=servidor)
     hilo_servidor.start()
+
+    servidor_listo.wait()
 
 def iniciar_cliente(id_cliente):
     hilo_cliente = threading.Thread(target=cliente, args=(id_cliente,))
@@ -342,9 +354,6 @@ def iniciar_cliente(id_cliente):
 
 if __name__ == "__main__":
     iniciar_servidor()
-
-    # Esperamos que el servidor esté listo
-    time.sleep(1)
 
     # Iniciar los clientes
     hilo_cliente_1 = iniciar_cliente(1)
@@ -369,20 +378,20 @@ if __name__ == "__main__":
     plataforma = platform()
 
     # Imprimir mediciones
-    print("Mediciones:")
-    print(f"\t- Plataforma: {plataforma}")
-    print(f"\t- Tiempo total KEM: {tiempo_total_kem} segundos.")
-    print(f"\t- CPU total KEM: {cpu_total_kem} segundos.")
-    print(f"\t- RAM total KEM: {ram_total_kem} MB.")
-    print(f"\t- Tiempo total DSS: {tiempo_total_dss} segundos.")
-    print(f"\t- CPU total DSS: {cpu_total_dss} segundos.")
-    print(f"\t- RAM total DSS: {ram_total_dss} MB.")
-    print(f"\t- Tiempo total AES: {tiempo_total_aes} segundos.")
-    print(f"\t- CPU total AES: {cpu_total_aes} segundos.")
-    print(f"\t- RAM total AES: {ram_total_aes} MB.")
+    imprimir("Mediciones:")
+    imprimir(f"\t- Plataforma: {plataforma}")
+    imprimir(f"\t- Tiempo total KEM: {tiempo_total_kem} segundos.")
+    imprimir(f"\t- CPU total KEM: {cpu_total_kem} segundos.")
+    imprimir(f"\t- RAM total KEM: {ram_total_kem} MB.")
+    imprimir(f"\t- Tiempo total DSS: {tiempo_total_dss} segundos.")
+    imprimir(f"\t- CPU total DSS: {cpu_total_dss} segundos.")
+    imprimir(f"\t- RAM total DSS: {ram_total_dss} MB.")
+    imprimir(f"\t- Tiempo total AES: {tiempo_total_aes} segundos.")
+    imprimir(f"\t- CPU total AES: {cpu_total_aes} segundos.")
+    imprimir(f"\t- RAM total AES: {ram_total_aes} MB.")
 
     # Escribir los resultados en un archivo CSV
-    print("Escribiendo resultados en el archivo CSV...")
+    imprimir("Escribiendo resultados en el archivo CSV...")
 
     # Arreglo con los resultados
     resultados = [
@@ -417,7 +426,7 @@ if __name__ == "__main__":
         # Escribe los resultados formateados
         escritor_csv.writerow(resultados_formateados)
 
-    print("Resultados añadidos al CSV con éxito.")
+    imprimir("Resultados añadidos al CSV con éxito.")
 
-    print("Fin del programa.")
+    imprimir("Fin del programa.")
 
