@@ -67,6 +67,7 @@ def servidor():
 
     # Abrimos un socket para escuchar conexiones
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # Permitir reutilizar la dirección
         s.bind((HOST, PORT))
         s.listen()
 
@@ -261,7 +262,6 @@ if __name__ == "__main__":
 
     # Iniciar los clientes
     hilo_cliente_1 = iniciar_cliente(1)
-    time.sleep(1) # Pausa para simular que el cliente 1 se conecta antes que el cliente 2.
     hilo_cliente_2 = iniciar_cliente(2)
 
     # Esperar a que los clientes terminen
