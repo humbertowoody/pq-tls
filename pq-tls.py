@@ -1,4 +1,5 @@
 import socket
+from platform import platform
 import time
 import threading
 from quantcrypt.kem import Kyber
@@ -8,6 +9,9 @@ from Crypto.Hash import SHAKE256
 from Crypto.Util.Padding import pad, unpad
 from Crypto.Random import get_random_bytes
 import sys
+import csv
+import psutil
+from os import getpid, path
 
 # Argumentos del programa
 verificacion_dilithium = int(sys.argv[1])  # 0: Sin verificación, 1: Solo clientes, 2: Clientes y servidor
@@ -27,6 +31,25 @@ else:
 
 print(f"\t- Se transmitirán {n_bytes} bytes.")
 
+# Variables para mediciones
+tiempo_inicio_kem  = 0
+tiempo_fin_kem     = 0
+cpu_inicio_kem     = 0
+cpu_fin_kem        = 0
+ram_inicio_kem     = 0
+ram_fin_kem        = 0
+tiempo_inicio_dss  = 0
+tiempo_fin_dss     = 0
+cpu_inicio_dss     = 0
+cpu_fin_dss        = 0
+ram_inicio_dss     = 0
+ram_fin_dss        = 0
+tiempo_inicio_aes  = 0
+tiempo_fin_aes     = 0
+cpu_inicio_aes     = 0
+cpu_fin_aes        = 0
+ram_inicio_aes     = 0
+ram_fin_aes        = 0
 
 # Parámetros de la conexión
 HOST = '127.0.0.1'  # Dirección local para el servidor
@@ -84,6 +107,10 @@ def recibir(socket):
     return bytes(datos)
 
 def servidor():
+    global tiempo_inicio_kem, tiempo_fin_kem, cpu_inicio_kem, cpu_fin_kem, ram_inicio_kem, ram_fin_kem
+    global tiempo_inicio_dss, tiempo_fin_dss, cpu_inicio_dss, cpu_fin_dss, ram_inicio_dss, ram_fin_dss
+    global tiempo_inicio_aes, tiempo_fin_aes, cpu_inicio_aes, cpu_fin_aes, ram_inicio_aes, ram_fin_aes
+
     kyber = Kyber()
     dilithium = Dilithium()
     clientes = {}
@@ -101,6 +128,11 @@ def servidor():
         s.listen()
 
         print(f"Servidor: Escuchando en {HOST}:{PORT}")
+
+        # Medición: Inicio KEM.
+        tiempo_inicio_kem = time.perf_counter()
+        cpu_inicio_kem = time.process_time()
+        ram_inicio_kem = psutil.Process(getpid()).memory_info().rss / (1024 ** 2)
 
         # Esperar a que se conecten dos clientes
         while len(clientes) < 2:
@@ -131,6 +163,16 @@ def servidor():
             enviar(conn, ciphertext)
             print(f"Servidor: Ciphertext enviado al cliente {addr} con longitud {len(ciphertext)} bytes.")
 
+        # Medición: Fin KEM.
+        tiempo_fin_kem = time.perf_counter()
+        cpu_fin_kem = time.process_time()
+        ram_fin_kem = psutil.Process(getpid()).memory_info().rss / (1024 ** 2)
+
+        # Medición: Inicio DSS.
+        tiempo_inicio_dss = time.perf_counter()
+        cpu_inicio_dss = time.process_time()
+        ram_inicio_dss = psutil.Process(getpid()).memory_info().rss / (1024 ** 2)
+
         # Si se requiere verificación de Dilithium ya sea para el servidor o ambos, recibir el certificado y la
         # clave pública de Dilithium de ambos clientes y verificar la firma.
         if verificacion_dilithium == 1 or verificacion_dilithium == 2:
@@ -157,6 +199,16 @@ def servidor():
                 enviar(conn, pk_dilithium)
                 print(f"Servidor: Clave Pública Dilithium enviada al cliente {addr} con longitud {len(pk_dilithium)} bytes.")
 
+        # Medición: Fin DSS.
+        tiempo_fin_dss = time.perf_counter()
+        cpu_fin_dss = time.process_time()
+        ram_fin_dss = psutil.Process(getpid()).memory_info().rss / (1024 ** 2)
+
+        # Medición: Inicio AES.
+        tiempo_inicio_aes = time.perf_counter()
+        cpu_inicio_aes = time.process_time()
+        ram_inicio_aes = psutil.Process(getpid()).memory_info().rss / (1024 ** 2)
+
         # Uno de los clientes enviará un mensaje en AES, lo descifraremos e imprimermos,
         # y posteriormente, cifraremos y enviaremos al otro cliente.
         cliente = 1
@@ -175,6 +227,11 @@ def servidor():
                 mensaje_cifrado = cifrar_aes(mensaje, clave_aes)
                 enviar(conn, mensaje_cifrado)
                 print(f"Servidor: Mensaje cifrado enviado al cliente {addr} con longitud {len(mensaje_cifrado)} bytes.")
+
+        # Medición: Fin AES.
+        tiempo_fin_aes = time.perf_counter()
+        cpu_fin_aes = time.process_time()
+        ram_fin_aes = psutil.Process(getpid()).memory_info().rss / (1024 ** 2)
 
         # Cerrar la Conexión
         for addr, (conn, pk_cliente, ciphertext, shared_secret, clave_aes) in clientes.items():
@@ -296,6 +353,71 @@ if __name__ == "__main__":
     # Esperar a que los clientes terminen
     hilo_cliente_1.join()
     hilo_cliente_2.join()
+
+    # Calcular mediciones
+    tiempo_total_kem = tiempo_fin_kem - tiempo_inicio_kem
+    cpu_total_kem = cpu_fin_kem - cpu_inicio_kem
+    ram_total_kem = ram_fin_kem - ram_inicio_kem
+    tiempo_total_dss = tiempo_fin_dss - tiempo_inicio_dss
+    cpu_total_dss = cpu_fin_dss - cpu_inicio_dss
+    ram_total_dss = ram_fin_dss - ram_inicio_dss
+    tiempo_total_aes = tiempo_fin_aes - tiempo_inicio_aes
+    cpu_total_aes = cpu_fin_aes - cpu_inicio_aes
+    ram_total_aes = ram_fin_aes - ram_inicio_aes
+
+    # Extraemos la plataforma.
+    plataforma = platform()
+
+    # Imprimir mediciones
+    print("Mediciones:")
+    print(f"\t- Plataforma: {plataforma}")
+    print(f"\t- Tiempo total KEM: {tiempo_total_kem} segundos.")
+    print(f"\t- CPU total KEM: {cpu_total_kem} segundos.")
+    print(f"\t- RAM total KEM: {ram_total_kem} MB.")
+    print(f"\t- Tiempo total DSS: {tiempo_total_dss} segundos.")
+    print(f"\t- CPU total DSS: {cpu_total_dss} segundos.")
+    print(f"\t- RAM total DSS: {ram_total_dss} MB.")
+    print(f"\t- Tiempo total AES: {tiempo_total_aes} segundos.")
+    print(f"\t- CPU total AES: {cpu_total_aes} segundos.")
+    print(f"\t- RAM total AES: {ram_total_aes} MB.")
+
+    # Escribir los resultados en un archivo CSV
+    print("Escribiendo resultados en el archivo CSV...")
+
+    # Arreglo con los resultados
+    resultados = [
+        plataforma, verificacion_dilithium, n_bytes,
+        tiempo_total_kem, tiempo_total_dss, tiempo_total_aes,
+        cpu_total_kem, cpu_total_dss, cpu_total_aes,
+        ram_total_kem, ram_total_dss, ram_total_aes
+    ]
+
+    # Formatear los números para mantener 8 decimales
+    resultados_formateados = [f"{valor:.8f}" if isinstance(valor, float) else valor for valor in resultados]
+
+
+    # Ruta al archivo CSV
+    ruta_archivo = 'resultados.csv'
+
+    # Verifica si el archivo existe para saber si debemos escribir los encabezados
+    escribe_encabezados = not path.exists(ruta_archivo)
+
+    with open(ruta_archivo, 'a', newline='', encoding='utf-8') as archivo:
+        escritor_csv = csv.writer(archivo)
+
+        # Si es la primera vez, escribe los encabezados
+        if escribe_encabezados:
+            escritor_csv.writerow([
+                'plataforma', 'nivel_dss', 'cantidad_de_bytes_de_envio',
+                'tiempo_kem', 'tiempo_dss', 'tiempo_mensaje',
+                'cpu_kem', 'cpu_dss', 'cpu_mensaje',
+                'ram_kem', 'ram_dss', 'ram_mensaje'
+            ])
+
+        # Escribe los resultados formateados
+        escritor_csv.writerow(resultados_formateados)
+
+    print("Resultados añadidos al CSV con éxito.")
 
     print("Fin del programa.")
 
