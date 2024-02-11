@@ -54,6 +54,35 @@ def descifrar_aes(ct, clave):
     pt = unpad(cipher.decrypt(ct), AES.block_size)
     return pt
 
+def enviar(socket, datos):
+    # Primero, enviamos la longitud de los datos como un entero de 64 bits
+    longitud_datos = len(datos)
+    socket.sendall(longitud_datos.to_bytes(8, byteorder='big'))
+
+    # Luego, enviamos los datos en bloques
+    inicio = 0
+    while inicio < longitud_datos:
+        fin = inicio + 4096  # Tamaño del bloque, ajusta según necesidades
+        socket.sendall(datos[inicio:fin])
+        inicio = fin
+
+def recibir(socket):
+    # Primero, recibimos la longitud de los datos
+    datos_longitud = socket.recv(8)
+    longitud_datos = int.from_bytes(datos_longitud, byteorder='big')
+
+    # Luego, recibimos los datos en bloques
+    datos = bytearray()
+    bytes_recibidos = 0
+    while bytes_recibidos < longitud_datos:
+        bloque = socket.recv(min(4096, longitud_datos - bytes_recibidos))
+        if not bloque:
+            raise ConnectionError("Conexión cerrada antes de recibir todos los datos esperados")
+        datos.extend(bloque)
+        bytes_recibidos += len(bloque)
+
+    return bytes(datos)
+
 def servidor():
     kyber = Kyber()
     dilithium = Dilithium()
@@ -79,7 +108,7 @@ def servidor():
             print(f"Servidor: Cliente {addr} conectado.")
 
             # Recibir Clave Pública del Cliente
-            pk_cliente = conn.recv(1568)
+            pk_cliente = recibir(conn)
 
             print(f"Servidor: Clave Pública KEM recibida del cliente {addr} con longitud {len(pk_cliente)} bytes.")
 
@@ -99,7 +128,7 @@ def servidor():
 
         # Enviar el cyphertext a cada cliente.
         for addr, (conn, pk_cliente, ciphertext, shared_secret, clave_aes) in clientes.items():
-            conn.send(ciphertext)
+            enviar(conn, ciphertext)
             print(f"Servidor: Ciphertext enviado al cliente {addr} con longitud {len(ciphertext)} bytes.")
 
         # Si se requiere verificación de Dilithium ya sea para el servidor o ambos, recibir el certificado y la
@@ -109,9 +138,9 @@ def servidor():
             # Recibir el certificado y la llave pública de dilithium del cliente y verificar.
             for addr, (conn, pk_cliente, ciphertext, shared_secret, clave_aes) in clientes.items():
                 print(f"Servidor: Recibiendo certificado y clave pública de Dilithium del cliente {addr}.")
-                certificado_cliente = conn.recv(4627)
+                certificado_cliente = recibir(conn)
                 print(f"Servidor: Certificado recibido del cliente {addr} con longitud {len(certificado_cliente)} bytes.")
-                pk_dilithium_cliente = conn.recv(2592)
+                pk_dilithium_cliente = recibir(conn)
                 print(f"Servidor: Clave Pública Dilithium recibida del cliente {addr} con longitud {len(pk_dilithium_cliente)} bytes.")
                 if dilithium.verify(pk_dilithium_cliente, b'Certificado de cliente', certificado_cliente):
                     print(f"Servidor: La firma del cliente {addr} es válida.")
@@ -123,9 +152,9 @@ def servidor():
         if verificacion_dilithium == 2:
             print(f"Servidor: Enviando certificado y clave pública de Dilithium a los clientes.")
             for addr, (conn, pk_cliente, ciphertext, shared_secret, clave_aes) in clientes.items():
-                conn.send(certificado)
+                enviar(conn, certificado)
                 print(f"Servidor: Certificado enviado al cliente {addr} con longitud {len(certificado)} bytes.")
-                conn.send(pk_dilithium)
+                enviar(conn, pk_dilithium)
                 print(f"Servidor: Clave Pública Dilithium enviada al cliente {addr} con longitud {len(pk_dilithium)} bytes.")
 
         # Uno de los clientes enviará un mensaje en AES, lo descifraremos e imprimermos,
@@ -135,7 +164,7 @@ def servidor():
         for addr, (conn, pk_cliente, ciphertext, shared_secret, clave_aes) in clientes.items():
             if cliente == 1:
                 print(f"Servidor: Esperando mensaje cifrado del cliente {addr}.")
-                mensaje_cifrado = conn.recv(1000001) #(n_bytes + AES.block_size)
+                mensaje_cifrado = recibir(conn)
                 print(f"Servidor: Mensaje cifrado recibido del cliente {addr} con longitud {len(mensaje_cifrado)} bytes.")
                 mensaje_descifrado = descifrar_aes(mensaje_cifrado, clave_aes)
                 print(f"Servidor: Mensaje descifrado del cliente {addr}: {mensaje_descifrado}")
@@ -144,7 +173,7 @@ def servidor():
             else:
                 print(f"Servidor: Enviando mensaje cifrado al cliente {addr}.")
                 mensaje_cifrado = cifrar_aes(mensaje, clave_aes)
-                conn.send(mensaje_cifrado)
+                enviar(conn, mensaje_cifrado)
                 print(f"Servidor: Mensaje cifrado enviado al cliente {addr} con longitud {len(mensaje_cifrado)} bytes.")
 
         # Cerrar la Conexión
@@ -178,13 +207,13 @@ def cliente(id_cliente):
         print(f"Cliente {id_cliente}: Conectado al servidor.")
 
         # Enviar Clave Pública KEM al Servidor
-        s.sendall(pk_kyber)
+        enviar(s, pk_kyber)
 
 
         print(f"Cliente {id_cliente}: Clave Pública KEM enviada al servidor con longitud {len(pk_kyber)} bytes.")
 
         # Recibir ciphertext del Servidor
-        ciphertext = s.recv(1568)
+        ciphertext = recibir(s)
 
         print(f"Cliente {id_cliente}: Ciphertext recibido del servidor con longitud {len(ciphertext)} bytes.")
 
@@ -201,18 +230,18 @@ def cliente(id_cliente):
         # Si la verificación de cliente está habilitada, enviar el certificado y la clave pública de Dilithium.
         if verificacion_dilithium == 1 or verificacion_dilithium == 2:
             print(f"Cliente {id_cliente}: Enviando certificado y clave pública de Dilithium al servidor.")
-            s.send(certificado)
+            enviar(s, certificado)
             print(f"Cliente {id_cliente}: Certificado enviado al servidor con longitud {len(certificado)} bytes.")
-            s.send(pk_dilithium)
+            enviar(s, pk_dilithium)
             print(f"Cliente {id_cliente}: Clave Pública Dilithium enviada al servidor con longitud {len(pk_dilithium)} bytes.")
 
         # Si la verificación del servidor está habilitada, recibir el certificado y la calve pública de
         # Dilitium del servidor y verificar la firma.
         if verificacion_dilithium == 2:
             print(f"Cliente {id_cliente}: Recibiendo certificado y clave pública de Dilithium del servidor.")
-            certificado_servidor = s.recv(4627)
+            certificado_servidor = recibir(s)
             print(f"Cliente {id_cliente}: Certificado recibido del servidor con longitud {len(certificado_servidor)} bytes.")
-            pk_dilithium_servidor = s.recv(2592)
+            pk_dilithium_servidor = recibir(s)
             print(f"Cliente {id_cliente}: Clave Pública Dilithium recibida del servidor con longitud {len(pk_dilithium_servidor)} bytes.")
 
             if dilithium.verify(pk_dilithium_servidor, b'Certificado de servidor', certificado_servidor):
@@ -228,11 +257,11 @@ def cliente(id_cliente):
             print(f"Cliente {id_cliente}: Mensaje aleatorio generado: {mensaje_prueba}")
             mensaje_cifrado = cifrar_aes(mensaje_prueba, clave_aes)
             print(f"Cliente {id_cliente}: Mensaje cifrado: {mensaje_cifrado}")
-            s.send(mensaje_cifrado)
+            enviar(s, mensaje_cifrado)
             print(f"Cliente {id_cliente}: Mensaje cifrado enviado al servidor con longitud {len(mensaje_cifrado)} bytes.")
         else:
             print(f"Cliente {id_cliente}: Esperando mensaje cifrado del servidor.")
-            mensaje_cifrado = s.recv(1000001) #(n_bytes + AES.block_size)
+            mensaje_cifrado = recibir(s)
             print(f"Cliente {id_cliente}: Mensaje cifrado recibido del servidor con longitud {len(mensaje_cifrado)} bytes.")
             if len(mensaje_cifrado) == 0:
                 print(f"Cliente {id_cliente}: No se recibió mensaje del servidor.")
