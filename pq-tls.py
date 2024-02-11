@@ -14,7 +14,7 @@ import psutil
 from os import getpid, path
 
 # Función para imprimir
-DEBUG = False
+DEBUG = True
 def imprimir(mensaje):
     if DEBUG:
         print(mensaje)
@@ -129,11 +129,17 @@ def servidor():
     # Generar el certificado con la clave privada de Dilithium.
     certificado = dilithium.sign(sk_dilithium, b'Certificado de servidor')
 
+    imprimir("Servidor: Iniciando servidor...")
+
     # Abrimos un socket para escuchar conexiones
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        imprimir("Servidor: Socket creado, iniciando servidor...")
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # Permitir reutilizar la dirección
+        imprimir("Servidor: Socket configurado para reutilizar la dirección.")
         s.bind((HOST, PORT))
+        imprimir(f"Servidor: Socket enlazado a {HOST}:{PORT}")
         s.listen()
+        imprimir("Servidor: Escuchando conexiones")
 
         servidor_listo.set()
 
