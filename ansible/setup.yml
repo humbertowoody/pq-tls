@@ -1,0 +1,96 @@
+---
+- hosts: ubuntu_vms
+  become: yes
+  vars:
+    pyenv_root: "/home/ubuntu/.pyenv"
+    python_version: "3.12.1"
+    repository_url: "https://github.com/humbertowoody/pq-tls.git"
+    project_dir: "/home/ubuntu/pq-tls"
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install required packages
+      apt:
+        name:
+          - make
+          - build-essential
+          - libssl-dev
+          - zlib1g-dev
+          - libbz2-dev
+          - libreadline-dev
+          - libsqlite3-dev
+          - wget
+          - curl
+          - llvm
+          - libncurses5-dev
+          - libncursesw5-dev
+          - xz-utils
+          - tk-dev
+          - libffi-dev
+          - liblzma-dev
+          - python-openssl
+          - git
+
+    - name: Install pyenv
+      git:
+        repo: "https://github.com/pyenv/pyenv.git"
+        dest: "{{ pyenv_root }}"
+        version: master
+      environment:
+        HOME: "/home/ubuntu"
+
+    - name: Install Python using pyenv
+      shell: "{{ pyenv_root }}/bin/pyenv install {{ python_version }}"
+      args:
+        creates: "{{ pyenv_root }}/versions/{{ python_version }}/bin/python"
+      environment:
+        PYENV_ROOT: "{{ pyenv_root }}"
+        PATH: "{{ pyenv_root }}/bin:{{ ansible_env.PATH }}"
+
+    - name: Clone the repository
+      git:
+        repo: "{{ repository_url }}"
+        dest: "{{ project_dir }}"
+        clone: yes
+        update: yes
+
+    - name: Create a virtual environment
+      pip:
+        name: virtualenv
+        state: latest
+      environment:
+        PYENV_ROOT: "{{ pyenv_root }}"
+        PATH: "{{ pyenv_root }}/versions/{{ python_version }}/bin:{{ ansible_env.PATH }}"
+
+    - name: Setup virtual environment
+      shell: |
+        . {{ pyenv_root }}/versions/{{ python_version }}/bin/activate
+        python -m venv {{ project_dir }}/env
+      args:
+        executable: /bin/bash
+      environment:
+        PYENV_ROOT: "{{ pyenv_root }}"
+        PATH: "{{ pyenv_root }}/versions/{{ python_version }}/bin:{{ ansible_env.PATH }}"
+
+    - name: Install project dependencies
+      shell: |
+        . {{ project_dir }}/env/bin/activate
+        pip install -r {{ project_dir }}/requirements.txt
+      args:
+        executable: /bin/bash
+
+    - name: Run tests
+      shell: |
+        . {{ project_dir }}/env/bin/activate
+        cd {{ project_dir }}
+        ./ejecutar_pruebas.sh
+      args:
+        executable: /bin/bash
+
+    - name: Fetch results file to local machine
+      fetch:
+        src: "{{ project_dir }}/resultados.csv"
+        dest: "~/Downloads/resultados_{{ inventory_hostname }}.csv"
+        flat: yes
