@@ -9,7 +9,7 @@ niveles_dss=(0 1 2)
 cantidades_bytes=(1024 10240 102400 1048576)
 
 # Número de iteraciones por combinación
-NUM_ITERACIONES=1
+NUM_ITERACIONES=150
 
 # Ejecutar cada combinación NUM_ITERACIONES veces con un timeout de 5 segundos
 for nivel in "${niveles_dss[@]}"; do
