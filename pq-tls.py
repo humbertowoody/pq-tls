@@ -93,7 +93,7 @@ def enviar(socket, datos):
     # Luego, enviamos los datos en bloques
     inicio = 0
     while inicio < longitud_datos:
-        fin = inicio + 4096  # Tamaño del bloque, ajusta según necesidades
+        fin = inicio + 4096  # Tamaño del bloque
         socket.sendall(datos[inicio:fin])
         inicio = fin
 
@@ -372,13 +372,13 @@ if __name__ == "__main__":
     # Calcular mediciones
     tiempo_total_kem = tiempo_fin_kem - tiempo_inicio_kem
     cpu_total_kem = cpu_fin_kem - cpu_inicio_kem
-    ram_total_kem = ram_fin_kem - ram_inicio_kem
+    ram_total_kem = ram_fin_kem
     tiempo_total_dss = tiempo_fin_dss - tiempo_inicio_dss
     cpu_total_dss = cpu_fin_dss - cpu_inicio_dss
-    ram_total_dss = ram_fin_dss - ram_inicio_dss
+    ram_total_dss = ram_fin_dss
     tiempo_total_aes = tiempo_fin_aes - tiempo_inicio_aes
     cpu_total_aes = cpu_fin_aes - cpu_inicio_aes
-    ram_total_aes = ram_fin_aes - ram_inicio_aes
+    ram_total_aes = ram_fin_aes
 
     # Extraemos la plataforma.
     plataforma = platform()
@@ -409,7 +409,6 @@ if __name__ == "__main__":
 
     # Formatear los números para mantener 8 decimales
     resultados_formateados = [f"{valor:.8f}" if isinstance(valor, float) else valor for valor in resultados]
-
 
     # Ruta al archivo CSV
     ruta_archivo = 'resultados.csv'
