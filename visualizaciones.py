@@ -110,7 +110,7 @@ for column in comparison_columns:
     plt.title(f'Comparación de {column} por Plataforma y Nivel DSS')
     plt.xlabel('Plataforma')
     plt.ylabel(column)
-    plt.xticks(rotation=45)
+    plt.xticks(rotation=0)
     plt.legend(title='Nivel DSS')
 
     # Guardar la gráfica en la carpeta 'graficas'
@@ -128,7 +128,7 @@ for column in comparison_columns:
     plt.title(f'Comparación de {column} por Plataforma y Nivel DSS')
     plt.xlabel('Plataforma')
     plt.ylabel(column)
-    plt.xticks(rotation=45)
+    plt.xticks(rotation=0)
     plt.legend(title='Nivel DSS')
 
     # Guardar la gráfica en la carpeta 'graficas'
