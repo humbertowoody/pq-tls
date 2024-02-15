@@ -1,2 +1,0 @@
-plataforma,nivel_dss,cantidad_de_bytes_de_envio,tiempo_kem,tiempo_dss,tiempo_mensaje,cpu_kem,cpu_dss,cpu_mensaje,ram_kem,ram_dss,ram_mensaje
-macOS-14.2.1-arm64-arm-64bit,2,5,0.01030792,0.00516050,0.00232642,0.01170800,0.00538600,0.00295500,40.67187500,40.67187500,40.57812500
